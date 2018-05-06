@@ -18,7 +18,7 @@ LOG_FILENAME = "/home/display/smartdfi/smartdfid/logfile.txt"
 LOG_LEVEL = logging.INFO  			# Could be "INFO",  "DEBUG" or "WARNING"
 
 HOST = "localhost"
-PORT = 12581					# smartdfid: 12581, smartgpiod: 12582, msggend: 12583
+PORT = 12581					# smartdfid: 12581, gpiod: 12582, msggend: 12583
 
 TX_PORT = "/dev/ttyUSB_hub1"
 RX_PORT = "/dev/ttyUSB_hub2"

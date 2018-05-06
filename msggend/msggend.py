@@ -3,10 +3,9 @@
 
 import logging
 import logging.handlers
-# import argparse		# for command line parsing
 import sys
-import time
 import datetime
+import time
 import socket
 import re			# regular expressions
 import json
@@ -18,7 +17,7 @@ LOG_FILENAME = "/home/display/smartdfi/msggend/logfile.txt"
 LOG_LEVEL = logging.INFO 			# Could be "INFO",  "DEBUG" or "WARNING"
 
 HOST = "localhost"
-PORT = 12583					# smartdfid: 12581, smartgpiod: 12582, smartgeneratord: 12583
+PORT = 12583					# smartdfid: 12581, gpiod: 12582, msggend: 12583
 
 MODE = "statisch"
 
@@ -44,7 +43,7 @@ def request_departures():
 		return [{"line":1, "text":"Fehlerhafte Daten"}]
 
 	now = datetime.datetime.now()
-	line = 1
+	dfi_line = 1
 	logger.debug("Number of results from server: " + str(len(deps)))
 	for d in deps:
 		
@@ -59,39 +58,39 @@ def request_departures():
 		try:
 			time = datetime.datetime.fromtimestamp(int(time_str[6:-10]))
 		except:
-			logger.info("Could not decode time for on departure")
+			logger.info("Could not decode time for one departure")
 			continue
 
 		diff_min = int((time - now).total_seconds() / 60)
 
 		if "LineName" in d:
-			line_name = d["LineName"]
+			line_name = d["LineName"]  # this contains the line number as a string, d not confuse with dfi line, which refers to text rows
 		else:
 			logger.info("One departure was missing its LineName")
 			continue
 
 		try:
-			line_number = int(line_name)
+			line_number = int(line_name)	# try to convert to Integer for comparison later on
 		except:
-			line_number = 0
+			line_number = 0			# setting this to zero means, that this entry will always pass the check for line number below 99 later.
 
 		if "Direction" in d:
-			direction = d["Direction"]
+			direction = d["Direction"]	# this contains the destination
 		else:
 			logger.info("One departure was missing its Direction")
 			continue
 
 		if diff_min < 7 or line_number > 99:
-			continue
+			continue	# only display certain results
 			
 		# if line_number < 10:
 		#	line_name = " " + line_name     # align numbers to the right. only looks good if the special character for three empty cols is inserted instead of space -> fix encoding issue first
 
-		array.append({"line": line, "align": "D", "text": line_name + " " + direction, "text2": str(diff_min)})
+		array.append({"line": dfi_line, "align": "D", "text": line_name + " " + direction, "text2": str(diff_min)})
 
-		line += 1 
+		dfi_line += 1 
 
-		if line > 4:
+		if dfi_line > 4:
 			break
 	
 	array.append({"line":5, "align":"L", "text":"Reichenbachstr."})
@@ -125,10 +124,9 @@ class MyLogger(object):
                 if message.rstrip() != "":
                         self.logger.log(self.level, message.rstrip())
 
-# Replace stdout and stderr with logging to file at INFO/ERROR level
-sys.stdout = MyLogger(logger, logging.INFO)
+# Replace stdout and stderr with logging to file at DEBUG/ERROR level
+sys.stdout = MyLogger(logger, logging.DEBUG)
 sys.stderr = MyLogger(logger, logging.ERROR)
-
 
 logger.info("Starting msggend daemon.")
 
@@ -148,8 +146,6 @@ except socket.error, msg:
 
 inc.listen(0)
 logger.info("Now listening")
-
-debug_ctr = 0
 
 while(True):
 	conn, addr = inc.accept()	# blocking call
@@ -241,5 +237,4 @@ while(True):
 	conn.sendall("ACK")
 	conn.close()
 
-	debug_ctr += 1
-
+	
