@@ -6,7 +6,7 @@ import logging
 import logging.handlers
 import datetime
 import socket
-import RPi.GPIO
+import RPi.GPIO as gpio
 
 # =============== SETTINGS ==========================
 
@@ -16,9 +16,16 @@ LOG_LEVEL = logging.INFO  			# Could be "INFO",  "DEBUG" or "WARNING"
 HOST = "localhost"
 PORT = 12582					# smartdfid: 12581, gpiod: 12582, msggend: 12583
 
+PIR_TIMER = 0
+
 # =============== FUNCTION DEFINITIONS ======================
 
-
+def pir_triggered(channel):
+	if channel == 7:
+		# reset timer to 5 minutes
+		PIR_TIMER = 5
+		
+		# tell msggend that something moved (via sockets)
 
 
 # =============== CONFIGURE LOGGING ==========================
@@ -49,23 +56,32 @@ class MyLogger(object):
                         self.logger.log(self.level, message.rstrip())
 
 # Replace stdout and stderr with logging to file at INFO/ERROR level
-sys.stdout = MyLogger(logger, logging.INFO)
-sys.stderr = MyLogger(logger, logging.ERROR)
+#sys.stdout = MyLogger(logger, logging.INFO)
+#sys.stderr = MyLogger(logger, logging.ERROR)
 
 logger.info("Starting gpiod daemon.")
 
 
 # =============== MAIN PROGRAM ==========================
 
-# acquire GIPOs
+# set up RPi.GPIO
+gpio.setmode(gpio.BOARD)
 
+# acquire GIPOs
 # output for LEDs
+gpio.setup(16, gpio.OUT)
+gpio.setup(18, gpio.OUT)
+gpio.setup(22, gpio.OUT)
 
 # input for PIR sensor
+gpio.setup(7, gpio.IN, pull_up_down = gpio.PUD_DOWN)
+gpio.add_event_detect(7, gpio.RISING, callback = pir_triggered)
+
+# remember gpio.cleanup() !
 
 
 # ============= CONFIGURE SOCKETS =================
-
+"""
 inc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)         # socket for incoming connection from cron or user
 inc.settimeout(None)
 inc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -86,5 +102,5 @@ while(True):
 
         rec = conn.recv(20)             # receive some text from connected client
         rec = rec.strip()               # strip whitespace
-
+"""
 
