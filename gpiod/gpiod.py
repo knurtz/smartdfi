@@ -5,27 +5,93 @@
 import logging
 import logging.handlers
 import datetime
+import time			# for sleep
 import socket
-import RPi.GPIO as gpio
+import RPi.GPIO as g
 
 # =============== SETTINGS ==========================
 
 LOG_FILENAME = "/home/display/smartdfi/gpiod/logfile.txt"
-LOG_LEVEL = logging.INFO  			# Could be "INFO",  "DEBUG" or "WARNING"
+LOG_LEVEL = logging.DEBUG  			# Could be "INFO",  "DEBUG" or "WARNING"
 
 HOST = "localhost"
 PORT = 12582					# smartdfid: 12581, gpiod: 12582, msggend: 12583
 
 PIR_TIMER = 0
+MOTION_TIMEOUT = 1				# timeout in minutes
+
+LED1_PIN = 16
+LED2_PIN = 18
+LED3_PIN = 22
+
+PIR_PIN = 7
+
+CLK1_PIN = 11
+CLK2_PIN = 13
+CLKEN_PIN = 15
+
+CLK_DEFAULT_STATE = True
+CLK_ENABLE_STATE = True
 
 # =============== FUNCTION DEFINITIONS ======================
 
-def pir_triggered(channel):
+def setup_gpio():
+
+	# set up RPi.GPIO
+	g.setmode(g.BOARD)
+	
+	# outputs for LEDs
+	g.setup(LED1_PIN, g.OUT)
+	g.setup(LED2_PIN, g.OUT)
+	g.setup(LED3_PIN, g.OUT)
+	
+	# outputs for clock
+	g.setup(CLK1_PIN, g.OUT)
+	g.setup(CLK2_PIN, g.OUT)
+	g.setup(CLKEN_PIN, g.OUT)
+
+	# default values for outputs
+	leds_off()
+	g.output(CLKEN_PIN, not CLK_ENABLE_STATE)
+	g.output(CLK1_PIN, CLK_DEFAULT_STATE)
+	g.output(CLK2_PIN, CLK_DEFAULT_STATE)
+
+	# interrupt input for PIR sensor
+	g.setup(7, g.IN, pull_up_down = g.PUD_DOWN)
+	g.add_event_detect(7, g.RISING, callback = pir_callback)
+	
+
+def leds_on():
+	g.output(LED1_PIN, True)
+	g.output(LED2_PIN, True)
+	g.output(LED3_PIN, True)
+
+def leds_off():
+	g.output(LED1_PIN, False)
+	g.output(LED2_PIN, False)
+	g.output(LED3_PIN, False)
+
+
+def minute_callback():
+	global PIR_TIMER
+
+	if PIR_TIMER > 0:
+		PIR_TIMER = PIR_TIMER - 1
+		if PIR_TIMER == 0:
+			logger.debug("Motion timeout reached")
+			leds_off()	
+
+
+def pir_callback(channel):
+	global PIR_TIMER
+
 	if channel == 7:
 		# reset timer to 5 minutes
-		PIR_TIMER = 5
+		PIR_TIMER = MOTION_TIMEOUT
+		logger.debug("Motion detected")
+		leds_on()
+
 		
-		# tell msggend that something moved (via sockets)
 
 
 # =============== CONFIGURE LOGGING ==========================
@@ -64,43 +130,45 @@ logger.info("Starting gpiod daemon.")
 
 # =============== MAIN PROGRAM ==========================
 
-# set up RPi.GPIO
-gpio.setmode(gpio.BOARD)
-
-# acquire GIPOs
-# output for LEDs
-gpio.setup(16, gpio.OUT)
-gpio.setup(18, gpio.OUT)
-gpio.setup(22, gpio.OUT)
-
-# input for PIR sensor
-gpio.setup(7, gpio.IN, pull_up_down = gpio.PUD_DOWN)
-gpio.add_event_detect(7, gpio.RISING, callback = pir_triggered)
-
-# remember gpio.cleanup() !
-
-
-# ============= CONFIGURE SOCKETS =================
-"""
-inc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)         # socket for incoming connection from cron or user
-inc.settimeout(None)
-inc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-logger.debug("Incoming Socket created")
-
 try:
-        inc.bind((HOST,PORT))
+	if __name__ == "__main__":
+		
+		setup_gpio()
+		
+		# create listening socket
+		inc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)         # socket for incoming connection from cron or user
+		inc.settimeout(None)
+		inc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		logger.debug("Incoming Socket created")
+	
+	        inc.bind((HOST,PORT))
+		inc.listen(0)
+		logger.info("Now listening on port " + str(PORT))
+
+		while(True):
+		        conn, addr = inc.accept()       	# blocking call
+			rec = conn.recv(20).strip()             # receive some text from connected client, strip whitespace
+				
+			if rec == "tick":
+				minute_callback()
+				conn.sendall("ACK")
+				conn.close()
+				continue	# go back to listening for incoming connections
+
+			else:
+				conn.sendall("NAK")
+				conn.close()
+				continue	# go back to listening for incoming connections
+
+
+except KeyboardInterrupt:
+	print "Keyboard Interrupt, exiting"
+
 except socket.error, msg:
         logger.error("Bind failed. Error Code: " + str(msg[0]) + " - Error Message: " + msg[1])
-        sys.exit()
+ 
+finally:
+	g.cleanup()
 
-inc.listen(0)
-logger.info("Now listening")
 
-while(True):
-        conn, addr = inc.accept()       # blocking call
-
-        rec = conn.recv(20)             # receive some text from connected client
-        rec = rec.strip()               # strip whitespace
-"""
 
