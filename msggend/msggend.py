@@ -170,11 +170,11 @@ while(True):
 	if MODE == "abfahrten":
 		if t.tm_hour == 19 and t.tm_min >= 0 and t.tm_min <= 30 and (t.tm_wday == 0 or t.tm_wday == 3):		# if service hour starts
 			MODE = "sprechstunde"
-		if t.tm_hour >= 22:					# if day ends
+		if t.tm_hour >= 23:					# if day ends
 			MODE = "statisch"
 	
 	elif MODE == "statisch":
-		if t.tm_hour >= 6 and t.tm_hour < 22:
+		if t.tm_hour >= 6 and t.tm_hour < 23:
 			MODE = "abfahrten"					# if day starts
 
 
