@@ -20,8 +20,8 @@ LOG_LEVEL = logging.INFO  			# Could be "INFO",  "DEBUG" or "WARNING"
 HOST = "localhost"
 PORT = 12581					# smartdfid: 12581, gpiod: 12582, msggend: 12583
 
-TX_PORT = "/dev/ttyUSB_hub1"
-RX_PORT = "/dev/ttyUSB_hub2"
+TX_PORT = "/dev/ttyUSB1"
+RX_PORT = "/dev/ttyUSB0"
 
 DISPLAY = smart_dfi_display.Display(tx_port = TX_PORT, rx_port = RX_PORT, address = 2)
 # =============== FUNCTION DEFINITIONS ======================
