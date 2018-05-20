@@ -18,7 +18,7 @@ HOST = "localhost"
 PORT = 12582					# smartdfid: 12581, gpiod: 12582, msggend: 12583
 
 PIR_TIMER = 0
-MOTION_TIMEOUT = 1				# timeout in minutes
+MOTION_TIMEOUT = 3				# timeout in minutes
 
 LED1_PIN = 16
 LED2_PIN = 18
@@ -63,7 +63,9 @@ def setup_gpio():
 
 def leds_on():
 	g.output(LED1_PIN, True)
+	time.sleep(0.1)
 	g.output(LED2_PIN, True)
+	time.sleep(0.1)
 	g.output(LED3_PIN, True)
 
 def leds_off():
