@@ -62,11 +62,11 @@ def setup_gpio():
 	
 
 def leds_on():
-	g.output(LED1_PIN, True)
-	time.sleep(0.1)
-	g.output(LED2_PIN, True)
-	time.sleep(0.1)
 	g.output(LED3_PIN, True)
+	time.sleep(0.075)
+	g.output(LED2_PIN, True)
+	time.sleep(0.075)
+	g.output(LED1_PIN, True)
 
 def leds_off():
 	g.output(LED1_PIN, False)
