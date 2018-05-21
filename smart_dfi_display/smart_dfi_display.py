@@ -106,9 +106,9 @@ class Display:
         else:
 		print("[smart_dfi_display] ERROR - Some bytes got lost.")
 	        return False
-
-        if not self.rx_channel.read(2) == "\x10\x31":
-	        print("[smart_dfi_display] ERROR - No acknowledge from display after successfully sending data.")
+	resp = self.rx_channel.read(2) 
+	if not resp == "\x10\x31":
+	        print("[smart_dfi_display] ERROR - No acknowledge from display after successfully sending data. Received: " + resp)
         else:
         	print("[smart_dfi_display] DEBUG - Data acknowledged by display.")
 
