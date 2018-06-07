@@ -5,7 +5,6 @@ import logging
 import logging.handlers
 import sys
 import datetime
-import time
 import socket
 import re				# regular expressions
 import json
@@ -57,12 +56,16 @@ def read_config():
 			logger.error("Parsing config. Error in section " + s)
 			continue
 
-		section = {"startHour": hours, "startMinute": minutes}
+		section = {"starthour": hours, "startminute": minutes}
 		# copy config for each valid section
 		for k in parser.options(s):
 			section[k] = parser.get(s, k)
 
-		sections.append(section)
+		if "mode" in section:
+			sections.append(section)
+
+		else:
+			logger.error("Parsing config. No mode given for section " + s)
 
 	# if configuration contains at least one valid section, replace default section and return
 	if len(sections) > 0:
@@ -72,12 +75,39 @@ def read_config():
 
 
 def default_config():
-	return {"timeposition": "BottomRight", "sections": [{"starthour": 0, "startminute": 0, "mode": "text", "text": "Fehlerhafte Konfiguration"}]}
+	return {"timeposition": "BottomRight", "sections": [{"starthour": 0, "startminute": 0, "mode": "Text", "text": "Fehlerhafte Konfiguration"}]}
 
 
-def request_departures():
+def update_section(sections):
+
+	cur = -1
+	now = datetime.datetime.now()
+
+	# go through sections and check if starttime and weekday criteria, update current section accordingly
+	for i in range(0, len(sections)):
+		if isAfter(now.hour, now.minute, sections[i]["starthour"], sections[i]["startminute"]):
+			# skip sections that do not apply to the current day
+			if "weekdays" in sections[i]:
+				if sections[i]["weekdays"].find(str(now.weekday())) == -1:
+					continue
+			cur = i
+		else:
+			break
+
+	return cur
+
+
+def isAfter(hour1, minute1, hour2, minute2):
+
+	if hour1 > hour2 or (hour1 == hour2 and minute1 > minute2):
+		return True
+	else:
+		return False
+
+
+def request_departures(stopid, stopname, lines):
 	array = []
-	payload = {"stopid": "33000131", "limit": 15}	# hard coded stop id for Reichenbachstraße
+	payload = {"stopid": stopid, "limit": 15}
 
 	try:
 		r = requests.post("http://webapi.vvo-online.de/dm?format=json", data=payload)
@@ -142,10 +172,10 @@ def request_departures():
 
 		dfi_line += 1
 
-		if dfi_line > 4:
+		if dfi_line > (lines - 1):
 			break
 
-	array.append({"line":5, "align":"L", "text":"Reichenbachstr."})
+	array.append({"line":lines, "align":"L", "text":stopname})
 	return array
 
 
@@ -155,11 +185,6 @@ def request_departures():
 try:
 	if __name__ == "__main__":
 
-		# first of all, read configuration
-		config = read_config()
-
-		print config
-		"""
 		# Make a handler that writes to a file, making a new file at midnight and keeping 3 backups
 		handler = logging.handlers.TimedRotatingFileHandler(LOG_FILENAME, when = "midnight", backupCount = 3)
 
@@ -185,12 +210,19 @@ try:
 		                        self.logger.log(self.level, message.rstrip())
 
 		# Replace stdout and stderr with logging to file at DEBUG/ERROR level
-		sys.stdout = MyLogger(logger, logging.DEBUG)
-		sys.stderr = MyLogger(logger, logging.ERROR)
+		#sys.stdout = MyLogger(logger, logging.DEBUG)
+		#sys.stderr = MyLogger(logger, logging.ERROR)
 
 		logger.info("Starting msggend daemon.")
 
-		# socket for incoming connection from cron or user
+		# read configuration
+		config = read_config()
+		print config
+
+		# start off being in section -1 (no section found)
+		current_section = -1
+
+		# create socket for incoming connection from cron or user
 		inc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		inc.settimeout(None)
 		inc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -207,7 +239,6 @@ try:
 
 			rec = conn.recv(20)		# receive some text from connected client
 			rec = rec.strip()		# strip whitespace
-			msg_type = 0
 
 			logger.debug("received: " + rec + " END")
 
@@ -218,51 +249,38 @@ try:
 				continue	# go back to listening for incoming connections
 
 			# minute tick was sent: check current time and compare with config, maybe switch mode
-			# note: config currently hard coded, in the furure, a submodule should check against a .conf file
 
-			t = time.localtime(time.time())
+			current_section = update_section(config["sections"])
 
-			if MODE == "abfahrten":
-				if t.tm_hour == 19 and t.tm_min >= 0 and t.tm_min <= 30 and (t.tm_wday == 0 or t.tm_wday == 3):		# if service hour starts
-					MODE = "sprechstunde"
-				if t.tm_hour >= 23:					# if day ends
-					MODE = "statisch"
+			print ("Current section updated to " + str(current_section))
 
-			elif MODE == "statisch":
-				if t.tm_hour >= 6 and t.tm_hour < 23:
-					MODE = "abfahrten"					# if day starts
+			# do nothing if no config for the current time was found
+			if current_section == -1:
+				conn.sendall("ACK")
+				conn.close()
+				continue
 
+			sec = config["sections"][current_section]
 
-			elif MODE == "sprechstunde":
-				if t.tm_hour >= 19 and t.tm_min >= 30:		# if service hour ends
-					MODE = "abfahrten"
+			if sec["mode"] == "Off":
+				conn.sendall("ACK")
+				conn.close()
+				continue
 
-			logger.debug("Mode: " + MODE)
+			if sec["mode"] == "Text":
+				content.append({"line":1, "text": sec["text"]})
 
-			if MODE == "statisch":
-				continue				# stop here, if static mode is enabled
+			elif sec["mode"] == "Json":
+				with open("json/" + sec["filename"]) as json_data:
+					content = json.load(json_data)
 
+			elif sec["mode"] == "Stop":
+				content = request_departures(sec["stopid"], sec["stopname"], int(config["lines"]))
 
-			# generate appropriate message
-			# for abfahrten: get current departures from server, put into correct format
-			# for the other two: only generate message if MODE_CHANGED, otherwise only send empty message
-
-			content = []
-
-			if MODE == "abfahrten":
-
-				content = request_departures()
-
-			elif MODE == "sprechstunde":
-				content.append({"line":1, "align":"M", "text":"Herzlich Willkommen"})
-				content.append({"line":2, "align":"M", "text":"zur"})
-				content.append({"line":3, "align":"M", "text":"Internet-Sprechstunde!"})
-				content.append({"line":4, "text":" "})
-				content.append({"line":5, "text":" "})
-
-			# generate a string that displays the current time
-			time_string = str(t.tm_hour) + ":" + ("0" if t.tm_min < 10 else "") + str(t.tm_min)
-			content.append({"line":5, "align": "R", "text": time_string})
+			# generate a string that displays the current time (hard coded for now)
+			t = datetime.datetime.now()
+			time_string = str(t.hour) + ":" + ("0" if t.minute < 10 else "") + str(t.minute)
+			content.append({"line":int(config["lines"]), "align": "R", "text": time_string})
 
 			# connect to smartdifd
 			try:
@@ -279,7 +297,7 @@ try:
 				out.sendall(json.dumps(content))
 				feedback = out.recv(20)
 				feedback = feedback.strip()
-				logger.debug("Feeback from smartdfid: " + feedback)
+				logger.debug("Feedback from smartdfid: " + feedback)
 				out.close()
 			except:
 				logger.error("Failed to send data to smartdfid")
@@ -291,7 +309,7 @@ try:
 			# on success:
 			conn.sendall("ACK")
 			conn.close()
-		"""
+
 except KeyboardInterrupt:
 	print "Keyboard Interrupt, exiting"
 
