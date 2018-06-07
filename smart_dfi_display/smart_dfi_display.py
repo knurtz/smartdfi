@@ -92,9 +92,10 @@ class Display:
 
         print ("[smart_dfi_display] DEBUG - Transmitted header")
 
-        # check if display responds with [DLE]0 (this channel has timeout of 1 second)
-        if not self.rx_channel.read(2) == "\x10\x30":    # reads two bytes from serial channel until it timeouts (Add timeout exception handler!)
-       		print ("[smart_dfi_display] ERROR - Received no response from display.")
+        # check if display responds with [DLE]0
+	resp = self.rx_channel.read(2) 
+	if not resp == "\x10\x30":    # reads two bytes from serial channel until it timeouts
+       		print ("[smart_dfi_display] ERROR - Received no response from display. Received: " + self.str2ord(resp))
            	return False
 
         print("[smart_dfi_display] DEBUG - Received response from display.")
@@ -108,7 +109,7 @@ class Display:
 	        return False
 	resp = self.rx_channel.read(2) 
 	if not resp == "\x10\x31":
-	        print("[smart_dfi_display] ERROR - No acknowledge from display after successfully sending data. Received: " + resp)
+	        print("[smart_dfi_display] ERROR - No acknowledge from display after successfully sending data. Received: " + self.str2ord(resp))
         else:
         	print("[smart_dfi_display] DEBUG - Data acknowledged by display.")
 
@@ -116,6 +117,12 @@ class Display:
 
         return True
 
+	
+    def str2ord(self, s):
+	r = ""
+	for c in s:
+		r = r + str(ord(c))
+	return r
 
 
     def create_field(self, line_number, text, align = "L", font = "P", start="01", length="03"):
