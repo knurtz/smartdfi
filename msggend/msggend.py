@@ -14,7 +14,7 @@ import ConfigParser		# for .cfg files
 # =============== SETTINGS ==========================
 
 LOG_FILENAME = "/home/display/smartdfi/msggend/logfile.txt"
-LOG_LEVEL = logging.DEBUG 			# Could be "INFO",  "DEBUG" or "WARNING"
+LOG_LEVEL = logging.INFO 			# Could be "INFO",  "DEBUG" or "WARNING"
 
 HOST = "localhost"
 PORT = 12583						# smartdfid: 12581, gpiod: 12582, msggend: 12583
@@ -28,8 +28,9 @@ def read_config():
 
 	# try reading the config file
 	try:
-		parser.read("config.cfg")
+		parser.read("/home/display/smartdfi/msggend/config.cfg")
 	except:
+		logger.error("Parsing config. Could not load file")
 		return config
 
 	# retrieve info about all sections
@@ -273,7 +274,7 @@ try:
 				content = [{"line":1, "text": sec["text"]}]
 
 			elif sec["mode"] == "Json":
-				with open("json/" + sec["filename"]) as json_data:
+				with open("/home/display/smartdfi/msggend/json/" + sec["filename"]) as json_data:
 					content = json.load(json_data)
 
 			elif sec["mode"] == "Stop":
