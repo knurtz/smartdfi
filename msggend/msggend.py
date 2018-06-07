@@ -210,8 +210,8 @@ try:
 		                        self.logger.log(self.level, message.rstrip())
 
 		# Replace stdout and stderr with logging to file at DEBUG/ERROR level
-		#sys.stdout = MyLogger(logger, logging.DEBUG)
-		#sys.stderr = MyLogger(logger, logging.ERROR)
+		sys.stdout = MyLogger(logger, logging.DEBUG)
+		sys.stderr = MyLogger(logger, logging.ERROR)
 
 		logger.info("Starting msggend daemon.")
 
@@ -262,13 +262,15 @@ try:
 
 			sec = config["sections"][current_section]
 
+			content = []
+
 			if sec["mode"] == "Off":
 				conn.sendall("ACK")
 				conn.close()
 				continue
 
 			if sec["mode"] == "Text":
-				content.append({"line":1, "text": sec["text"]})
+				content = [{"line":1, "text": sec["text"]}]
 
 			elif sec["mode"] == "Json":
 				with open("json/" + sec["filename"]) as json_data:
@@ -277,7 +279,7 @@ try:
 			elif sec["mode"] == "Stop":
 				content = request_departures(sec["stopid"], sec["stopname"], int(config["lines"]))
 
-			# generate a string that displays the current time (hard coded for now)
+			# generate a string that displays the current time (position hard coded for now)
 			t = datetime.datetime.now()
 			time_string = str(t.hour) + ":" + ("0" if t.minute < 10 else "") + str(t.minute)
 			content.append({"line":int(config["lines"]), "align": "R", "text": time_string})
