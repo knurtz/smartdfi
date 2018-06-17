@@ -8,6 +8,7 @@ import datetime
 import time			# for sleep
 import socket
 import RPi.GPIO as g
+import operator			# for XOR
 
 # =============== SETTINGS ==========================
 
@@ -30,8 +31,10 @@ CLK1_PIN = 11
 CLK2_PIN = 13
 CLKEN_PIN = 15
 
-CLK_DEFAULT_STATE = True
-CLK_ENABLE_STATE = True
+CLK_DEFAULT_STATE = False	# state for the clock control pins at startup
+CLK_ENABLE_STATE = True		# state for the enable pin on the driber for output to be enabled
+
+CLK_PHASE = True		# saves the current phase of the clock
 
 # =============== FUNCTION DEFINITIONS ======================
 
@@ -52,7 +55,7 @@ def setup_gpio():
 
 	# default values for outputs
 	leds_off()
-	g.output(CLKEN_PIN, not CLK_ENABLE_STATE)
+	g.output(CLKEN_PIN, not CLK_ENABLE_STATE)	# deactivate driver by default
 	g.output(CLK1_PIN, CLK_DEFAULT_STATE)
 	g.output(CLK2_PIN, CLK_DEFAULT_STATE)
 
@@ -76,25 +79,50 @@ def leds_off():
 
 def minute_callback():
 	global PIR_TIMER
-
+	
+	# handle backlight timeout
 	if PIR_TIMER > 0:
 		PIR_TIMER = PIR_TIMER - 1
 		if PIR_TIMER == 0:
 			logger.debug("Motion timeout reached")
-			leds_off()	
+			leds_off()
+
+	# handle clock update	
+	minute_sequence()
 
 
 def pir_callback(channel):
 	global PIR_TIMER
 
 	if channel == 7:
-		# reset timer to 5 minutes
+		# reset timer
 		PIR_TIMER = MOTION_TIMEOUT
 		logger.debug("Motion detected")
 		leds_on()
 
-		
 
+def minute_sequence():
+	global CLK_PHASE
+
+	# determine clk states depending on current phase
+	clk1_state = operator.xor(CLK_PHASE, CLK_DEFAULT_STATE)
+
+	# set clk control outputs to correct values
+	g.output(CLK1_PIN, clk1_state)
+	g.output(CLK2_PIN, not clk1_state)
+
+	# shortly enable the driver
+	g.output(CLKEN_PIN, CLK_ENABLE_STATE)
+	time.sleep(0.5)
+	g.output(CLKEN_PIN, not CLK_ENABLE_STATE)
+
+	# reset the clk controles ouptputs to default
+	g.output(CLK1_PIN, CLK_DEFAULT_STATE)
+	g.output(CLK2_PIN, CLK_DEFAULT_STATE)
+
+	# store current clock phase
+	CLK_PHASE = not CLK_PHASE
+	
 
 # =============== CONFIGURE LOGGING ==========================
 
